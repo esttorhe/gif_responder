@@ -10,7 +10,7 @@ Check the [closed `PR`s](https://github.com/esttorhe/gif_responder/pulls?q=is%3A
 1. Create a webtask profile: `wt init`
 1. Create a Github API token with `repo` access from: https://github.com/settings/tokens/new
 1. Generate the webhook url, substituting <YOUR_TOKEN> with the one from step #3: `wt create --name gif_responder --secret GITHUB_TOKEN=<YOUR_TOKEN> --prod https://github.com/esttorhe/gif_responder/blob/master/gif_responder.js`
-1. Install the webhook with the default settings on your repo by subsituting <USERNAME> and <REPO>, at: https://github.com/<USERNAME>/<REPO>/settings/hooks/new
+1. Install the webhook with the default settings on your repo by subsituting <USERNAME> and <REPO>, at: `https://github.com/<USERNAME>/<REPO>/settings/hooks/new`
 1. Optionally inspect any errors using the cli: `wt logs`
  
 _Notes:_
