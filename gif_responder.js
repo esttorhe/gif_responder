@@ -2,7 +2,7 @@ var Bluebird = require('bluebird');
 var Request = Bluebird.promisifyAll(require('request'));
 var _ = require('lodash');
 
-var API_URL = 'https://api.github.com';
+var API_URL = 'https://api.github.com:443';
 var WEB_URL = 'https://github.com';
 var REF = 'refs/heads/master';
 
@@ -15,110 +15,85 @@ module.exports = function (ctx, cb) {
         return cb(err);
     }
     
-    if (!Array.isArray(ctx.body.commits)) {
-        err = new Error('Unexpected payload: Missing commits array.');
+    if (!ctx.body.pull_request) {
+        err = new Error('Unexpected payload: Missing pull request information.');
         return cb(err);
     }
     
-    if (!ctx.body.repository) {
-        err = new Error('Unexpected payload: Missing repository information.');
-        return cb(err);
-    }
-    var payload = ctx.body;
-    if (payload.ref !== REF) {
-        msg = 'Push event does not affect the ref `' + REF + '`.';
+    var pull_request = ctx.body.pull_request;
+    
+    if (pull_request.state != 'open') {
+        msg = 'gif_responder only works over open PRs.';
         return cb(null, msg);
     }
+    
+    var additions = pull_request.additions;
+    var deletions = pull_request.deletions;
 
-    if (!affectsPackageJson) {
-        msg = 'Commits `' + _(payload.commits).pluck('id').join('`, `')
-            + '` do not affect the file `package.json`.';
+    if (!additions && !deletions) {
+        msg = 'Impossible pull request. No additions and/or deletions in it.';
         return cb(null, msg);
     }
     
     var headers = {
         'Authorization': 'Bearer ' + ctx.data.GITHUB_TOKEN,
         'User-Agent': 'Webtask Tagger',
+        'Accept': 'application/json'
     };
     
-   /* Bluebird.join(versionBeforePromise, versionAfterPromise, function (versionBefore, versionAfter) {*/
-        //return versionBefore !== versionAfter 
-            //?   createNewTag(payload.after, versionAfter)
-            //:   'This push did not update the package\'s version';
-    //})
-        /*.nodeify(cb);*/
-    
+    postComment().nodeify(cb);
     
     // Helper functions
-    
-    function getVersionFromCommit(commitSha) {
-        // If we're dealing with the initial commit, the `before`
-        // commit sha will be zeroed out. Shortcut and return 0.0.0.
-        if (commitSha === '0000000000000000000000000000000000000000') {
-            return Bluebird.resolve('0.0.0');
+    function sendComment(gif) {
+        var url = API_URL + '/repos/' + pull_request.head.repo.full_name  + '/issues/' + pull_request.number + '/comments';
+        var options = {
+            url: url,
+            headers: headers,
+            json: true,
+            body: {
+                "body": "With **" + additions + "** `additions` | **" + deletions + "** `deletions`] your score is:<br/>\![](" + gif + ")"
+            },
+        };
+            
+        var promise = Request.postAsync(options);
+            
+        return promise
+            .get(1)
+            .then(function (args) {
+                console.log("🎉");
+                return 'Successfully created comment.';
+            });
         }
         
-        var url = WEB_URL + '/' + payload.repository.full_name + '/raw/' + commitSha + '/package.json';
-        var promise = Request.getAsync(url);
+        function getGif() {
+            var query = '';
+            if (additions < deletions) {
+                query = 'not+bad';
+            } else {
+                query = ((additions - deletions) > 500) ? 'omg' : 'shrug';
+            }
+            
+            var giphy_url = 'http://api.giphy.com/v1/gifs/search?q=' + query + '&api_key=dc6zaTOxFJmzC'
+            var giphy_options = {
+                url: giphy_url,
+                json: true
+            }
+            
+            var promise = Request.getAsync(giphy_options);
         
-        return promise
-            // Because request callbacks have the (err, res, body) signature,
-            // Bluebird will resolve to a 2-element array like [res, body].
-            // We only want the body, at index 1 in the array.
-            .get(1)
-            // The body should be a plain String, we want to parse
-            // it into a javascript object.
-            .then(JSON.parse)
-            // Now that our Promise contains the parsed package.json, let's
-            // pull out the `version`.
-            .get('version');
-    }
+            return promise
+                .get(1)
+                .then(function (response) {
+                    var data = response.data;
+                    var randomIndex = Math.floor(Math.random()*data.length);
+                    var gif_url = data[randomIndex].images.original.url;
+                    console.log(gif_url);
+                    return sendComment(gif_url);
+                });
+        }
     
-    function createNewTag(commitSha, version) {
-        var now = new Date();
-        var url = API_URL + '/repos/' + payload.repository.full_name + '/git/tags';
-        var options = {
-            url: url,
-            headers: headers,
-            json: true,
-            body: {
-                tag: 'v' + version,
-                message: 'v' + version,
-                object: commitSha,
-                type: 'commit',
-                tagger: {
-                    name: payload.pusher.name,
-                    email: payload.pusher.email,
-                    date: now.toISOString(),
-                },
-            },
-        };
-        var promise = Request.postAsync(options);
-        
-        return promise
-            .get(1)
-            .then(function (tag) {
-                return createTagRef(tag.sha, tag.tag);
-            });
-    }
-    
-    function createTagRef(commitSha, tagName) {
-        var url = API_URL + '/repos/' + payload.repository.full_name + '/git/refs';
-        var options = {
-            url: url,
-            headers: headers,
-            json: true,
-            body: {
-                ref: 'refs/tags/' + tagName,
-                sha: commitSha,
-            },
-        };
-        var promise = Request.postAsync(options);
-        
-        return promise
-            .get(1)
-            .then(function (tagRef) {
-                return 'Successfully created tag `' + tagName + '`.';
-            });
+    function postComment() {
+        return getGif();
     }
 };
+
