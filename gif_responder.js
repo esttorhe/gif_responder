@@ -15,24 +15,26 @@ module.exports = function (ctx, cb) {
         return cb(err);
     }
     
-    if (!Array.isArray(ctx.body.commits)) {
-        err = new Error('Unexpected payload: Missing commits array.');
+    if (!ctx.body.pull_request) {
+        err = new Error('Unexpected payload: Missing pull request information.');
         return cb(err);
     }
     
-    if (!ctx.body.repository) {
-        err = new Error('Unexpected payload: Missing repository information.');
-        return cb(err);
-    }
-    var payload = ctx.body;
-    if (payload.ref !== REF) {
-        msg = 'Push event does not affect the ref `' + REF + '`.';
+    var pull_request = ctx.body.pull_request;
+    
+    if (pull_request.state != 'open') {
+        msg = 'gif_responder only works over open PRs.';
+        return cb(null, msg);
+    } else {
+        msg = 'PR status ' + pull_request.state;
         return cb(null, msg);
     }
+    
+    var additions = pull_request.additions;
+    var deletions = pull_request.deletions;
 
-    if (!affectsPackageJson) {
-        msg = 'Commits `' + _(payload.commits).pluck('id').join('`, `')
-            + '` do not affect the file `package.json`.';
+    if (!additions && !deletions) {
+        msg = 'Impossible pull request. No additions and/or deletions in it.';
         return cb(null, msg);
     }
     
@@ -122,3 +124,4 @@ module.exports = function (ctx, cb) {
             });
     }
 };
+
