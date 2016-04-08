@@ -3,6 +3,7 @@ Respond to `Github` `PR`s with a gif based on number of additions vs deletions.
 A webtask that can be used as a `Github` webhook to reply to `PR`s with an animated gif just to add some fun to them.
 
 Check the [closed `PR`s](https://github.com/esttorhe/gif_responder/pulls?q=is%3Apr+is%3Aclosed) for an example of this `webhook`'s responses.
+
 ![](web/gif_responder.gif)
 
 ## Installation instructions:
